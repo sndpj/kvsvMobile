@@ -1,0 +1,10 @@
+<resources>
+    <!-- Pre-Compose window background — matches the app's actual cream background (see
+         ui/theme/Color.kt AppBackground) so there's no flash of a different color before
+         Compose renders. Status bar color here is superseded at runtime by the explicit
+         SystemBarStyle set in MainActivity.enableEdgeToEdge(), but kept in sync anyway. -->
+    <style name="Theme.CricketScorer" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#F7F5F0</item>
+        <item name="android:windowBackground">#F7F5F0</item>
+    </style>
+</resources>
