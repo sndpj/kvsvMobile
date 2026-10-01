@@ -85,7 +85,7 @@ private fun FeedRow(feed: FeedResponse, selected: Boolean, canEdit: Boolean, onC
                 if (canEdit) Text(if (selected) "Editing ▾" else "Tap to edit", color = TextMuted, style = MaterialTheme.typography.labelSmall)
             }
             Spacer(Modifier.height(6.dp))
-            Text(feed.message, color = TextPrimary, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+            FeedMessageText(feed, color = TextPrimary, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
             Spacer(Modifier.height(4.dp))
             Text(
                 listOfNotNull(feed.createdByName?.let { "Posted by $it" }, feed.createdAt).joinToString(" · "),

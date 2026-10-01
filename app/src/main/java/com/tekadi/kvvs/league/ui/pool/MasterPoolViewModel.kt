@@ -134,9 +134,11 @@ class MasterPoolViewModel(app: Application) : AndroidViewModel(app) {
                 )
                 if (res.isSuccessful) { load(); info = "'$name' added to the pool"; onDone() }
                 else error = when (res.code()) {
-                    409 -> "Pool is full — remove a player before adding another"
+                    // KvsvRequest1.3 #2: 409 is not only "pool is full" — a duplicate mobile
+                    // number, email or name is a 409 too, so show the server's actual reason.
+                    409 -> res.friendlyErrorMessage("Pool is full — remove a player before adding another")
                     403 -> "You need Super Admin to add to the master pool"
-                    400 -> res.errorBody()?.string() ?: "Check the player's details and try again"
+                    400 -> res.friendlyErrorMessage("Check the player's details and try again")
                     else -> "Couldn't add player (HTTP ${res.code()})"
                 }
             } catch (e: Exception) {

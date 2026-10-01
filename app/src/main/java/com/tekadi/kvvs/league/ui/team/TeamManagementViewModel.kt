@@ -151,6 +151,9 @@ class TeamManagementViewModel(app: Application) : AndroidViewModel(app) {
     fun addPlayer(name: String, jerseyNumber: Int?, age: Int?, role: String, battingStyle: String?, bowlingStyle: String?, onDone: () -> Unit) {
         val team = selectedTeam ?: return
         if (name.isBlank()) { error = "Player name is required"; return }
+        duplicateRosterName(name, players.map { it.name })?.let { existing ->
+            error = "'$existing' is already on ${team.name}"; return
+        }
         loading = true; error = null
         viewModelScope.launch {
             try {
@@ -158,7 +161,8 @@ class TeamManagementViewModel(app: Application) : AndroidViewModel(app) {
                     CreatePlayerRequest(team.id, name.trim(), null, jerseyNumber, age, role, battingStyle, bowlingStyle)
                 )
                 if (res.isSuccessful) { openTeam(team); info = "'$name' added to the roster"; onDone() }
-                else error = "Couldn't add player (HTTP ${res.code()})"
+                // 409 = duplicate (name on this team, or a mobile/email already used) — say which.
+                else error = res.friendlyErrorMessage("Couldn't add player (HTTP ${res.code()})")
             } catch (e: Exception) {
                 error = "Couldn't reach the server: ${e.message ?: e::class.simpleName}"
             } finally { loading = false }

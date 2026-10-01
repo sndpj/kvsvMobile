@@ -17,10 +17,20 @@ import com.tekadi.kvvs.league.ui.theme.*
 import com.tekadi.kvvs.league.util.ErrorDialog
 import com.tekadi.kvvs.league.util.InfoToast
 import com.tekadi.kvvs.league.util.LiveEventToast
+import com.tekadi.kvvs.league.ui.dashboard.PlayerOfMatchLine
+import com.tekadi.kvvs.league.ui.dashboard.PlayerOfMatchPicker
 
 @Composable
 fun OnlineLiveScorerScreen(matchId: Long, vm: OnlineScorerViewModel = viewModel(), onExit: () -> Unit) {
     LaunchedEffect(matchId) { vm.loadMatch(matchId) }
+    var showCloseDialog by remember { mutableStateOf(false) }
+    if (showCloseDialog) {
+        CloseMatchDialog(
+            match = vm.match, submitting = vm.loading,
+            onConfirm = { reason -> vm.adminCloseMatch(reason) { showCloseDialog = false } },
+            onDismiss = { showCloseDialog = false },
+        )
+    }
 
     Surface(color = PitchBg, modifier = Modifier.fillMaxSize()) {
         Box(Modifier.padding(16.dp)) {
@@ -28,6 +38,13 @@ fun OnlineLiveScorerScreen(matchId: Long, vm: OnlineScorerViewModel = viewModel(
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     Spacer(Modifier.weight(1f))
                     LiveIndicator(vm.liveConnected, vm.polling)
+                    // KvsvRequest1.3 #6 — "Open the match — show right side close match option".
+                    if (vm.canCloseMatchNow) {
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(onClick = { showCloseDialog = true }, enabled = !vm.loading) {
+                            Text("✕ Close match", color = WicketRed, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
                 }
                 if (vm.loading && vm.match == null) {
                     PageLoader(color = Amber)
@@ -269,6 +286,14 @@ private fun ScoreHeader(inn: InningsScorecardDto, loading: Boolean) {
     }
 }
 
+/** KvsvRequest1.3 #5 — pick up players added to either team after the match started. */
+@Composable
+private fun RefreshSquadButton(vm: OnlineScorerViewModel) {
+    TextButton(onClick = { vm.refreshSquads() }, enabled = !vm.loading) {
+        Text("↻ Player added to the team? Refresh squad", color = InfoBlue, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
 /** Everything a scorer (not a viewer) sees: the wicket flow, next-batter/bowler prompts, and the button grid. */
 @Composable
 private fun ScoringControls(vm: OnlineScorerViewModel, inn: InningsScorecardDto) {
@@ -331,10 +356,18 @@ private fun ScoringControls(vm: OnlineScorerViewModel, inn: InningsScorecardDto)
             vm.availableNextBatters(inn).forEach { p ->
                 OutlinedButton(onClick = { vm.selectNextBatter(p.id) }, modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)) { Text(p.name) }
             }
+            RefreshSquadButton(vm)
         }
         needsBowler -> Panel {
             Text("Over complete — select next bowler", color = Amber)
-            Text("(Backend validates eligibility — no consecutive overs, overs cap)", color = Muted, style = MaterialTheme.typography.labelSmall)
+            // KvsvRequest1.3 #1 — the cap is now per match (or off), so say which applies.
+            val cap = vm.match?.let { m ->
+                if (!m.bowlerOverLimitEnabled) "no overs cap this match" else m.maxOversPerBowler?.let { "max $it over${if (it == 1) "" else "s"} each" }
+            }
+            Text(
+                "(Backend validates eligibility — no consecutive overs${cap?.let { ", $it" } ?: ", overs cap"})",
+                color = Muted, style = MaterialTheme.typography.labelSmall,
+            )
             Spacer(Modifier.height(8.dp))
             val bowlingId = vm.bowlingTeamId(inn.inningsNumber)
             if (bowlingId != null) {
@@ -342,6 +375,7 @@ private fun ScoringControls(vm: OnlineScorerViewModel, inn: InningsScorecardDto)
                     OutlinedButton(onClick = { vm.selectNextBowler(p.id) }, modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)) { Text(p.name) }
                 }
             }
+            RefreshSquadButton(vm)
         }
         else -> Panel {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -420,7 +454,21 @@ private fun ResultStep(m: MatchResponse, vm: OnlineScorerViewModel, onExit: () -
     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Panel {
-                Text("🏆 ${m.resultSummary ?: "Match complete"}", color = Amber, style = MaterialTheme.typography.headlineMedium)
+                val icon = if (m.status == "CANCELLED") "🚫" else "🏆"
+                Text("$icon ${m.resultSummary ?: "Match complete"}", color = Amber, style = MaterialTheme.typography.headlineMedium)
+                // KvsvRequest1.3 #7
+                m.playerOfMatchName?.let { name ->
+                    Spacer(Modifier.height(6.dp))
+                    PlayerOfMatchLine(name, color = Chalk, style = MaterialTheme.typography.bodyLarge)
+                }
+                if (vm.canOverridePlayerOfMatch) {
+                    Spacer(Modifier.height(8.dp))
+                    PlayerOfMatchPicker(
+                        candidates = playerOfMatchCandidates(vm.teamAPlayers, vm.teamBPlayers),
+                        currentId = m.playerOfMatchId, enabled = !vm.loading,
+                        onPick = { vm.setPlayerOfMatch(it) },
+                    )
+                }
             }
         }
         vm.scorecard?.innings?.forEachIndexed { idx, inn ->
@@ -534,3 +582,41 @@ private fun ScorerAssignmentPanel(m: MatchResponse, vm: OnlineScorerViewModel) {
     }
 }
 
+
+/**
+ * KvsvRequest1.3 #6 — confirmation before an admin closes the match, with a required reason.
+ * The match is cancelled straight away (no Super Admin approval step, unlike a scorer's close
+ * request), so the dialog says that plainly.
+ */
+@Composable
+private fun CloseMatchDialog(match: MatchResponse?, submitting: Boolean, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    var reason by remember { mutableStateOf("") }
+    val reasonError = closeReasonError(reason)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Close this match?") },
+        text = {
+            Column {
+                Text(
+                    (match?.let { "${it.teamAName} vs ${it.teamBName} will be closed now and marked cancelled. " } ?: "") +
+                        "No more scoring will be possible.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = reason, onValueChange = { reason = it.take(CLOSE_REASON_MAX) },
+                    label = { Text("Reason (required)") },
+                    placeholder = { Text("e.g. Rain stopped play") },
+                    supportingText = { Text("${reason.trim().length}/$CLOSE_REASON_MAX") },
+                    minLines = 2, modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(reason) }, enabled = reasonError == null && !submitting) {
+                Text(if (submitting) "Closing…" else "Close match", color = WicketRed)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}

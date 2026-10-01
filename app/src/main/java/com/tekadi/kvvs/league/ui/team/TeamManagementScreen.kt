@@ -1,6 +1,7 @@
 package com.tekadi.kvvs.league.ui.team
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -28,7 +29,11 @@ private val BATTING_STYLES = listOf("RIGHT_HAND", "LEFT_HAND")
 private val BOWLING_STYLES = listOf("RIGHT_ARM_FAST", "MEDIUM", "SPIN", "LEFT_ARM_SPIN")
 
 @Composable
-fun TeamManagementScreen(vm: TeamManagementViewModel = viewModel(), onBack: () -> Unit) {
+fun TeamManagementScreen(
+    vm: TeamManagementViewModel = viewModel(), onBack: () -> Unit,
+    // Player profile (KvsvRequest1.3) — tap a roster player's name.
+    onPlayerClick: (playerId: Long) -> Unit = {},
+) {
     ErrorDialog(vm.error) { vm.error = null }
     InfoToast(vm.info) { vm.info = null }
     LaunchedEffect(Unit) { vm.loadTournaments(); vm.loadPoolPlayers() }
@@ -52,7 +57,7 @@ fun TeamManagementScreen(vm: TeamManagementViewModel = viewModel(), onBack: () -
             if (vm.loading) PageLoader(color = ArcTeal)
 
             when {
-                vm.selectedTeam != null -> TeamDetail(vm)
+                vm.selectedTeam != null -> TeamDetail(vm, onPlayerClick)
                 vm.selectedTournament != null -> TeamList(vm)
                 else -> TournamentPicker(vm)
             }
@@ -227,7 +232,7 @@ private fun PlayerIdDropdown(label: String, options: List<PoolPlayerResponse>, o
 }
 
 @Composable
-private fun TeamDetail(vm: TeamManagementViewModel) {
+private fun TeamDetail(vm: TeamManagementViewModel, onPlayerClick: (Long) -> Unit) {
     var showAddPlayer by remember { mutableStateOf(false) }
     var pName by remember { mutableStateOf("") }
     var pJersey by remember { mutableStateOf("") }
@@ -294,15 +299,15 @@ private fun TeamDetail(vm: TeamManagementViewModel) {
         if (vm.players.isEmpty()) {
             item { Text("No players yet.", color = TextMuted) }
         }
-        items(vm.players) { p -> PlayerRow(p, onRemove = { vm.removePlayer(p) }) }
+        items(vm.players) { p -> PlayerRow(p, onOpenProfile = { onPlayerClick(p.id) }, onRemove = { vm.removePlayer(p) }) }
     }
 }
 
 @Composable
-private fun PlayerRow(p: PlayerResponse, onRemove: () -> Unit) {
+private fun PlayerRow(p: PlayerResponse, onOpenProfile: () -> Unit, onRemove: () -> Unit) {
     Surface(color = GraphitePanel, shape = heroPanelShape(), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column {
+            Column(Modifier.weight(1f).clickable(onClick = onOpenProfile)) {
                 Text("${p.name}${p.jerseyNumber?.let { " #$it" } ?: ""}", color = TextPrimary)
                 Text(listOfNotNull(p.role, p.battingStyle, p.bowlingStyle).joinToString(" · "), color = TextMuted, style = MaterialTheme.typography.labelSmall)
             }

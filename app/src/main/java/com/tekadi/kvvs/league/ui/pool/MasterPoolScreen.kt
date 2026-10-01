@@ -1,5 +1,6 @@
 package com.tekadi.kvvs.league.ui.pool
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,7 +21,11 @@ import com.tekadi.kvvs.league.util.InfoToast
 private val PLAYER_ROLES = listOf("BATTER", "BOWLER", "WICKET_KEEPER", "ALL_ROUNDER")
 
 @Composable
-fun MasterPoolScreen(vm: MasterPoolViewModel = viewModel(), onBack: () -> Unit) {
+fun MasterPoolScreen(
+    vm: MasterPoolViewModel = viewModel(), onBack: () -> Unit,
+    // Player profile (KvsvRequest1.3) — tap a pool player's name.
+    onPlayerClick: (playerId: Long) -> Unit = {},
+) {
     ErrorDialog(vm.error) { vm.error = null }
     InfoToast(vm.info) { vm.info = null }
     LaunchedEffect(Unit) {
@@ -68,6 +73,7 @@ fun MasterPoolScreen(vm: MasterPoolViewModel = viewModel(), onBack: () -> Unit) 
                         showRemove = CurrentUser.canManageMasterPool,
                         onAssign = { side -> vm.toggleAssignment(p.id, side) },
                         onRemove = { vm.removePlayer(p.id) },
+                        onOpenProfile = { onPlayerClick(p.id) },
                     )
                 }
             }
@@ -290,10 +296,11 @@ private fun PoolPlayerRow(
     showRemove: Boolean,
     onAssign: (PoolAssignment) -> Unit,
     onRemove: () -> Unit,
+    onOpenProfile: () -> Unit,
 ) {
     Surface(color = GraphitePanel, shape = heroPanelShape(), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1f).clickable(onClick = onOpenProfile)) {
                 Text("${player.name}${player.jerseyNumber?.let { " #$it" } ?: ""}", color = TextPrimary)
                 Text(listOfNotNull(player.role, player.battingStyle, player.bowlingStyle).joinToString(" · "),
                     color = TextMuted, style = MaterialTheme.typography.labelSmall)

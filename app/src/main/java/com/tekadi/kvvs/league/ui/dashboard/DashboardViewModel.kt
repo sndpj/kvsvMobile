@@ -13,7 +13,9 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
 
     var feeds by mutableStateOf<List<FeedResponse>>(emptyList())
     var recentMatches by mutableStateOf<List<RecentMatchSummary>>(emptyList())
-    var headToHead by mutableStateOf<HeadToHeadResponse?>(null)
+    // KvsvRequest1.3 #3: the Head-to-Head card (latest match's two teams) was removed from the
+    // dashboard — and with it the extra getMatch + head-to-head calls it made on every load.
+    // The backend endpoint (GET /api/dashboard/head-to-head) is untouched.
     var topBatsmen by mutableStateOf<List<LeaderboardEntry>>(emptyList())
     var topBowlers by mutableStateOf<List<LeaderboardEntry>>(emptyList())
     // Feature request: "Live matches should be display in slider in dashboard screen right now
@@ -40,10 +42,6 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
                 if (batsmenRes.isSuccessful) topBatsmen = batsmenRes.body().orEmpty()
                 if (bowlersRes.isSuccessful) topBowlers = bowlersRes.body().orEmpty()
 
-                // "Battle count" widget: defaults to the two teams from the most recent match,
-                // since a generic dashboard has no other natural pair of teams to compare —
-                // see README for this assumption.
-                loadHeadToHeadForMostRecentMatch()
                 loadLiveMatches()
             } catch (e: Exception) {
                 error = "Couldn't reach the server: ${e.message ?: e::class.simpleName}"
@@ -69,23 +67,6 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
             liveScorecards = scorecards
         } catch (_: Exception) {
             // Non-fatal — the rest of the dashboard still renders without the live band.
-        }
-    }
-
-    private suspend fun loadHeadToHeadForMostRecentMatch() {
-        // recent-matches doesn't carry team IDs (only names, for display) — fetch the match list
-        // for team IDs isn't available here either without a tournament context, so instead we
-        // resolve via the match detail endpoint using the first recent match's id if we have one.
-        // Simpler and robust: dashboard/recent-matches already gives us enough for display; for
-        // the head-to-head widget specifically we need IDs, so fetch the full match record once.
-        val mostRecentSummary = recentMatches.firstOrNull() ?: return
-        try {
-            val matchRes = RetrofitClient.api.getMatch(mostRecentSummary.matchId)
-            val m = matchRes.body() ?: return
-            val h2hRes = RetrofitClient.api.getHeadToHead(m.teamAId, m.teamBId)
-            if (h2hRes.isSuccessful) headToHead = h2hRes.body()
-        } catch (_: Exception) {
-            // Non-fatal — the rest of the dashboard still renders without this widget.
         }
     }
 }

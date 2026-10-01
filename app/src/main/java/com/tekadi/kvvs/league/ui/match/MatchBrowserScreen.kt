@@ -162,6 +162,8 @@ private fun CreateMatchForm(vm: MatchBrowserViewModel, onMatchSelected: (MatchRe
                 label = { Text("Overs per innings") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(8.dp))
+            BowlerLimitFields(vm)
+            Spacer(Modifier.height(8.dp))
             TeamDropdown("Team A", vm.teams, vm.newMatchTeamAId) { vm.newMatchTeamAId = it }
             Spacer(Modifier.height(8.dp))
             TeamDropdown("Team B", vm.teams, vm.newMatchTeamBId) { vm.newMatchTeamBId = it }
@@ -170,6 +172,33 @@ private fun CreateMatchForm(vm: MatchBrowserViewModel, onMatchSelected: (MatchRe
                 Text("Create Match")
             }
         }
+    }
+}
+
+/** KvsvRequest1.3 #1 — toggle for the per-bowler over restriction, plus an optional custom cap. */
+@Composable
+private fun BowlerLimitFields(vm: MatchBrowserViewModel) {
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Limit overs per bowler", color = Chalk)
+            Text(
+                bowlerLimitHint(vm.newMatchOvers.toIntOrNull(), vm.newMatchBowlerLimitEnabled),
+                color = Muted, style = MaterialTheme.typography.labelSmall,
+            )
+        }
+        Switch(checked = vm.newMatchBowlerLimitEnabled, onCheckedChange = { vm.newMatchBowlerLimitEnabled = it })
+    }
+    if (vm.newMatchBowlerLimitEnabled) {
+        Spacer(Modifier.height(4.dp))
+        OutlinedTextField(
+            value = vm.newMatchMaxOversPerBowler,
+            onValueChange = { v -> vm.newMatchMaxOversPerBowler = v.filter { it.isDigit() }.take(3) },
+            label = { Text("Max overs per bowler (optional)") }, singleLine = true,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

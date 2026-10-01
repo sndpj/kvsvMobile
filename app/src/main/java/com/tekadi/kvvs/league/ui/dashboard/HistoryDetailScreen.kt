@@ -1,10 +1,15 @@
 package com.tekadi.kvvs.league.ui.dashboard
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -13,8 +18,14 @@ import com.tekadi.kvvs.league.network.InningsScorecardDto
 import com.tekadi.kvvs.league.ui.theme.*
 
 @Composable
-fun HistoryDetailScreen(matchId: Long, vm: HistoryDetailViewModel = viewModel(), onBack: () -> Unit) {
+fun HistoryDetailScreen(
+    matchId: Long, vm: HistoryDetailViewModel = viewModel(), onBack: () -> Unit,
+    // Player profile (KvsvRequest1.3) — tap any player name on the scorecard.
+    onPlayerClick: (playerId: Long) -> Unit = {},
+) {
     LaunchedEffect(matchId) { vm.load(matchId) }
+    com.tekadi.kvvs.league.util.ErrorDialog(if (vm.match != null) vm.error else null) { vm.error = null }
+    com.tekadi.kvvs.league.util.InfoToast(vm.info) { vm.info = null }
 
     Surface(color = VoidBlack, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.padding(16.dp)) {
@@ -41,14 +52,26 @@ fun HistoryDetailScreen(matchId: Long, vm: HistoryDetailViewModel = viewModel(),
                                 Text("${match.oversLimit} overs · ${match.status}", color = TextMuted, style = MaterialTheme.typography.labelSmall)
                                 if (match.resultSummary != null) {
                                     Spacer(Modifier.height(8.dp))
-                                    Text("🏆 ${match.resultSummary}", color = RepulsorGold, style = MaterialTheme.typography.bodyLarge)
+                                    val icon = if (match.status == "CANCELLED") "🚫" else "🏆"
+                                    Text("$icon ${match.resultSummary}", color = RepulsorGold, style = MaterialTheme.typography.bodyLarge)
+                                }
+                                // KvsvRequest1.3 #7
+                                if (match.playerOfMatchName != null && match.playerOfMatchId != null) {
+                                    Spacer(Modifier.height(6.dp))
+                                    Box(Modifier.clickable { onPlayerClick(match.playerOfMatchId) }) {
+                                        PlayerOfMatchLine(match.playerOfMatchName, color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
+                                    }
+                                }
+                                if (vm.canOverridePlayerOfMatch && vm.potmCandidates.isNotEmpty()) {
+                                    Spacer(Modifier.height(8.dp))
+                                    PlayerOfMatchPicker(vm.potmCandidates, match.playerOfMatchId, !vm.loading) { vm.setPlayerOfMatch(it) }
                                 }
                             }
                         }
                     }
                 }
                 vm.scorecard?.innings?.forEachIndexed { idx, inn ->
-                    item { InningsCard(inn, "Innings ${idx + 1} — ${inn.battingTeamName}") }
+                    item { InningsCard(inn, "Innings ${idx + 1} — ${inn.battingTeamName}", onPlayerClick) }
                 }
             }
         }
@@ -56,7 +79,7 @@ fun HistoryDetailScreen(matchId: Long, vm: HistoryDetailViewModel = viewModel(),
 }
 
 @Composable
-private fun InningsCard(inn: InningsScorecardDto, title: String) {
+private fun InningsCard(inn: InningsScorecardDto, title: String, onPlayerClick: (Long) -> Unit) {
     Surface(shape = heroPanelShape(), color = GraphitePanel, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text(title, color = ArcTealBright, style = MaterialTheme.typography.labelSmall)
@@ -65,7 +88,7 @@ private fun InningsCard(inn: InningsScorecardDto, title: String) {
             Text("BATTING", color = TextMuted, style = MaterialTheme.typography.labelSmall)
             inn.battingCard.forEach { b ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(b.name, color = TextPrimary, modifier = Modifier.weight(1f))
+                    Text(b.name, color = TextPrimary, modifier = Modifier.weight(1f).clickable { onPlayerClick(b.playerId) })
                     Text("${b.runs} (${b.balls})", color = TextPrimary)
                 }
                 if (b.out && b.howOut != null) {
@@ -76,7 +99,7 @@ private fun InningsCard(inn: InningsScorecardDto, title: String) {
             Text("BOWLING", color = TextMuted, style = MaterialTheme.typography.labelSmall)
             inn.bowlingCard.forEach { bw ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(bw.name, color = TextPrimary, modifier = Modifier.weight(1f))
+                    Text(bw.name, color = TextPrimary, modifier = Modifier.weight(1f).clickable { onPlayerClick(bw.playerId) })
                     Text("${bw.wickets}/${bw.runsConceded} (${bw.overs})", color = TextPrimary)
                 }
             }

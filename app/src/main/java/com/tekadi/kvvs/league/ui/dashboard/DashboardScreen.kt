@@ -21,7 +21,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.tekadi.kvvs.league.data.CurrentUser
 import com.tekadi.kvvs.league.network.FeedResponse
-import com.tekadi.kvvs.league.network.HeadToHeadResponse
 import com.tekadi.kvvs.league.network.LeaderboardEntry
 import com.tekadi.kvvs.league.network.LiveMatchPointer
 import com.tekadi.kvvs.league.network.MatchScorecardDto
@@ -46,6 +45,8 @@ fun DashboardScreen(
     // Feature: Super Admin role assign/revoke — "For only role SUPER_ADMIN add option in mobile
     // dashboard screen."
     onManageUsers: () -> Unit = {},
+    // Player profile (KvsvRequest1.3) — tap a name on the Top Performers leaderboards.
+    onPlayerClick: (playerId: Long) -> Unit = {},
     // KvsvRequest1.2 #2 fix — flips true once when returning from Post Feed with a change to
     // pick up; see AppNav.kt's DASHBOARD composable for where this comes from.
     refreshFeedsSignal: Boolean = false,
@@ -58,7 +59,7 @@ fun DashboardScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            item { HeaderRow(vm, onLogout) }
+            item { HeaderRow(onLogout) }
 
             item { LiveMatchSlider(vm.liveMatches, vm.liveScorecards, onLiveMatchClick) }
 
@@ -86,7 +87,7 @@ fun DashboardScreen(
             item { FeedCarousel(vm.feeds, onFeedClick) }
 
             item { SectionHeader("Top Performers") }
-            item { LeaderboardRow(vm.topBatsmen, vm.topBowlers) }
+            item { LeaderboardRow(vm.topBatsmen, vm.topBowlers, onPlayerClick) }
 
             item { Spacer(Modifier.height(8.dp)) }
         }
@@ -94,7 +95,7 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun HeaderRow(vm: DashboardViewModel, onLogout: () -> Unit) {
+private fun HeaderRow(onLogout: () -> Unit) {
     // Direction C's header is plain text on the tinted canvas — no colored block, no big
     // display-face title. Swapped the old "CRICKET COMMAND" hero title (a leftover from before
     // the Tekadi rebrand) for the app name plus the role badge, matching the brief's markup.
@@ -111,8 +112,6 @@ private fun HeaderRow(vm: DashboardViewModel, onLogout: () -> Unit) {
         }
         TextButton(onClick = onLogout) { Text("Log out", color = TextMuted) }
     }
-    Spacer(Modifier.height(10.dp))
-    vm.headToHead?.let { HeadToHeadWidget(it) }
 }
 
 /**
@@ -249,32 +248,6 @@ private fun LiveMatchCard(pointer: LiveMatchPointer, scorecard: MatchScorecardDt
     }
 }
 
-/** "Battle count" — top-right widget on the dashboard, per the requested feature. */
-@Composable
-private fun HeadToHeadWidget(h2h: HeadToHeadResponse) {
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopEnd) {
-        Surface(
-            shape = heroPanelShape(10.dp), color = GraphitePanel,
-            modifier = Modifier.border(glowBorder(), heroPanelShape(10.dp)).widthIn(max = 220.dp),
-        ) {
-            Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("HEAD TO HEAD", color = TextMuted, style = MaterialTheme.typography.labelSmall)
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(h2h.teamAWins.toString(), color = ArcTealBright, style = MaterialTheme.typography.titleLarge)
-                    Text(h2h.teamAName.take(3).uppercase(), color = TextMuted, style = MaterialTheme.typography.labelSmall)
-                    Text("–", color = TextMuted)
-                    Text(h2h.teamBName.take(3).uppercase(), color = TextMuted, style = MaterialTheme.typography.labelSmall)
-                    Text(h2h.teamBWins.toString(), color = ArcTealBright, style = MaterialTheme.typography.titleLarge)
-                }
-                if (h2h.ties > 0) {
-                    Text("${h2h.ties} tied", color = TextMuted, style = MaterialTheme.typography.labelSmall)
-                }
-            }
-        }
-    }
-}
-
 @Composable
 private fun RoleActionRow(
     onBrowseMatches: () -> Unit, onManageTeams: () -> Unit, onManageMasterPool: () -> Unit,
@@ -399,7 +372,7 @@ private fun FeedCard(feed: FeedResponse, onFeedClick: (FeedResponse) -> Unit) {
                     )
                     Spacer(Modifier.height(6.dp))
                     // On the dark scrim over a photo, not a card — needs the light text token, not TextPrimary.
-                    Text(feed.message, color = TextOnDark, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+                    FeedMessageText(feed, color = TextOnDark, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
                 }
             }
         }
@@ -410,15 +383,15 @@ private fun FeedCard(feed: FeedResponse, onFeedClick: (FeedResponse) -> Unit) {
 }
 
 @Composable
-private fun LeaderboardRow(batsmen: List<LeaderboardEntry>, bowlers: List<LeaderboardEntry>) {
+private fun LeaderboardRow(batsmen: List<LeaderboardEntry>, bowlers: List<LeaderboardEntry>, onPlayerClick: (Long) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        LeaderboardPanel("Top Batsmen", "runs", batsmen, Modifier.weight(1f))
-        LeaderboardPanel("Top Bowlers", "wkts", bowlers, Modifier.weight(1f))
+        LeaderboardPanel("Top Batsmen", "runs", batsmen, Modifier.weight(1f), onPlayerClick)
+        LeaderboardPanel("Top Bowlers", "wkts", bowlers, Modifier.weight(1f), onPlayerClick)
     }
 }
 
 @Composable
-private fun LeaderboardPanel(title: String, unit: String, entries: List<LeaderboardEntry>, modifier: Modifier) {
+private fun LeaderboardPanel(title: String, unit: String, entries: List<LeaderboardEntry>, modifier: Modifier, onPlayerClick: (Long) -> Unit) {
     Surface(shape = heroPanelShape(), color = GraphitePanel, modifier = modifier) {
         Column(Modifier.padding(14.dp)) {
             Text(title.uppercase(), color = TextMuted, style = MaterialTheme.typography.labelSmall)
@@ -428,7 +401,7 @@ private fun LeaderboardPanel(title: String, unit: String, entries: List<Leaderbo
             }
             entries.forEachIndexed { idx, e ->
                 Row(
-                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    Modifier.fillMaxWidth().clickable { onPlayerClick(e.playerId) }.padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

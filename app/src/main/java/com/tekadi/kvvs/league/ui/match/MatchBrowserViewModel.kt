@@ -28,6 +28,9 @@ class MatchBrowserViewModel(app: Application) : AndroidViewModel(app) {
     var newMatchOvers by mutableStateOf("10")
     var newMatchTeamAId by mutableStateOf<Long?>(null)
     var newMatchTeamBId by mutableStateOf<Long?>(null)
+    // KvsvRequest1.3 #1 — per-bowler over restriction; on with the default cap unless changed.
+    var newMatchBowlerLimitEnabled by mutableStateOf(true)
+    var newMatchMaxOversPerBowler by mutableStateOf("")
 
     fun loadTournaments() {
         loading = true; error = null
@@ -82,6 +85,8 @@ class MatchBrowserViewModel(app: Application) : AndroidViewModel(app) {
         if (teamA == teamB) { error = "Team A and Team B must be different"; return }
         if (overs == null || overs <= 0) { error = "Enter a valid overs count"; return }
         if (newMatchDate.isBlank()) { error = "Enter a match date (yyyy-MM-dd)"; return }
+        val bowlerLimit = checkBowlerLimit(overs, newMatchBowlerLimitEnabled, newMatchMaxOversPerBowler)
+        if (bowlerLimit.error != null) { error = bowlerLimit.error; return }
 
         loading = true; error = null
         viewModelScope.launch {
@@ -90,16 +95,21 @@ class MatchBrowserViewModel(app: Application) : AndroidViewModel(app) {
                     CreateMatchRequest(
                         tournamentId = tournament.id, matchDate = newMatchDate,
                         oversLimit = overs, teamAId = teamA, teamBId = teamB,
+                        bowlerOverLimitEnabled = newMatchBowlerLimitEnabled,
+                        maxOversPerBowler = bowlerLimit.maxOversPerBowler,
                     )
                 )
                 if (res.isSuccessful && res.body() != null) {
                     showCreateForm = false
                     newMatchDate = java.time.LocalDate.now().toString()
+                    newMatchBowlerLimitEnabled = true
+                    newMatchMaxOversPerBowler = ""
                     info = "Match created"
                     onCreated(res.body()!!)
                 } else {
                     error = when (res.code()) {
                         403 -> "You need Tournament Admin (or Super Admin) to create a match"
+                        400 -> res.friendlyErrorMessage("Couldn't create match (HTTP 400)")
                         else -> "Couldn't create match (HTTP ${res.code()})"
                     }
                 }

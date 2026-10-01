@@ -127,6 +127,10 @@ interface ApiService {
     @GET("api/players/{id}/stats")
     suspend fun getPlayerStats(@Path("id") id: Long): Response<PlayerStatsResponse>
 
+    /** Player profile (KvsvRequest1.3) — public read; any of the person's player ids works. */
+    @GET("api/players/{id}/profile")
+    suspend fun getPlayerProfile(@Path("id") id: Long): Response<PlayerProfileResponse>
+
     @GET("api/matches")
     suspend fun getMatches(@Query("tournamentId") tournamentId: Long): Response<List<MatchResponse>>
 
@@ -151,6 +155,14 @@ interface ApiService {
     // Feature request #3: "ask scorer to close the match and generate summary after that."
     @POST("api/matches/{matchId}/close")
     suspend fun closeMatch(@Path("matchId") matchId: Long): Response<MatchResponse>
+
+    /** KvsvRequest1.3 #6 — Super/Tournament Admin closes the match now, with a reason. No approval step. */
+    @POST("api/matches/{matchId}/admin-close")
+    suspend fun adminCloseMatch(@Path("matchId") matchId: Long, @Body body: AdminCloseMatchRequest): Response<MatchCloseRequestResponse>
+
+    /** KvsvRequest1.3 #7 — Super/Tournament Admin overrides the automatically chosen Player of the Match. */
+    @PATCH("api/matches/{matchId}/player-of-match")
+    suspend fun setPlayerOfMatch(@Path("matchId") matchId: Long, @Body body: SetPlayerOfMatchRequest): Response<MatchResponse>
 
     // ---- Scorer requests (feature request #2) ----
     @POST("api/matches/{matchId}/scorer-requests")
@@ -197,9 +209,6 @@ interface ApiService {
     // showing only one."
     @GET("api/dashboard/live-matches")
     suspend fun getLiveMatches(): Response<List<LiveMatchPointer>>
-
-    @GET("api/dashboard/head-to-head")
-    suspend fun getHeadToHead(@Query("teamAId") teamAId: Long, @Query("teamBId") teamBId: Long): Response<HeadToHeadResponse>
 
     @GET("api/dashboard/top-batsmen")
     suspend fun getTopBatsmen(@Query("limit") limit: Int = 5): Response<List<LeaderboardEntry>>

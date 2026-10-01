@@ -49,12 +49,59 @@ data class PlayerResponse(
     val id: Long, val teamId: Long? = null, val name: String, val photoUrl: String? = null,
     val jerseyNumber: Int? = null, val age: Int? = null, val role: String? = null,
     val battingStyle: String? = null, val bowlingStyle: String? = null,
+    val mobileNumber: String? = null, val email: String? = null,
+    // Player profile (KvsvRequest1.3) — "little description about the player".
+    val bio: String? = null,
 )
 
 @Serializable
 data class CreatePlayerRequest(
-    val teamId: Long, val name: String, val photoUrl: String? = null, val jerseyNumber: Int? = null,
+    // Nullable since KvsvRequest1.3 #4: an edit (PUT /api/players/{id}) sends null to keep the
+    // player on their current team. Creating a player still always sends one.
+    val teamId: Long? = null, val name: String, val photoUrl: String? = null, val jerseyNumber: Int? = null,
     val age: Int? = null, val role: String? = null, val battingStyle: String? = null, val bowlingStyle: String? = null,
+    // null = leave unchanged on an edit (the backend no longer wipes contact info a client didn't send).
+    val mobileNumber: String? = null, val email: String? = null,
+    val bio: String? = null,
+)
+
+// ---- Player profile (KvsvRequest1.3), mirrors PlayerProfileDtos on the backend ----
+
+@Serializable
+data class TeamAppearance(
+    val teamId: Long, val teamName: String, val tournamentId: Long? = null, val tournamentName: String? = null,
+    val matches: Int,
+)
+
+@Serializable
+data class PlayerOfMatchAward(
+    val matchId: Long, val matchDate: String? = null, val teamAName: String, val teamBName: String,
+    val resultSummary: String? = null,
+)
+
+@Serializable
+data class CareerBatting(
+    val innings: Int, val notOuts: Int, val runs: Int, val ballsFaced: Int, val highestScore: Int,
+    val fours: Int, val sixes: Int, val fifties: Int, val hundreds: Int,
+    val average: Double? = null, val strikeRate: Double,
+)
+
+@Serializable
+data class CareerBowling(
+    val innings: Int, val ballsBowled: Int, val overs: String, val runsConceded: Int, val wickets: Int,
+    val maidens: Int, val average: Double? = null, val economy: Double, val bestFigures: String? = null,
+)
+
+@Serializable
+data class PlayerProfileResponse(
+    // The person's canonical id — the Master Pool player when this was opened from a team-roster
+    // copy of them. Edits go to this id.
+    val playerId: Long, val name: String, val photoUrl: String? = null, val jerseyNumber: Int? = null,
+    val age: Int? = null, val role: String? = null, val battingStyle: String? = null, val bowlingStyle: String? = null,
+    val bio: String? = null,
+    val matchesPlayed: Int, val teams: List<TeamAppearance> = emptyList(),
+    val playerOfMatchCount: Int, val playerOfMatchAwards: List<PlayerOfMatchAward> = emptyList(),
+    val batting: CareerBatting, val bowling: CareerBowling,
 )
 
 @Serializable
@@ -77,12 +124,19 @@ data class MatchResponse(
     // teams" without a second round-trip to /api/teams/{id} — Team Managers can now assign a
     // scorer directly for their own matches. UI-gating only; the server re-checks for real.
     val teamAManagerId: Long? = null, val teamBManagerId: Long? = null,
+    // KvsvRequest1.3 #1 — maxOversPerBowler is the effective cap, null when the restriction is off.
+    val bowlerOverLimitEnabled: Boolean = true, val maxOversPerBowler: Int? = null,
+    // KvsvRequest1.3 #7
+    val playerOfMatchId: Long? = null, val playerOfMatchName: String? = null,
 )
 
 @Serializable
 data class CreateMatchRequest(
     val tournamentId: Long, val groundId: Long? = null, val matchDate: String,
     val matchTime: String? = null, val oversLimit: Int, val teamAId: Long, val teamBId: Long,
+    // KvsvRequest1.3 #1 — per-bowler over restriction chosen by the match creator. null
+    // maxOversPerBowler = the default ceil(overs / 5).
+    val bowlerOverLimitEnabled: Boolean = true, val maxOversPerBowler: Int? = null,
     // scorerUserId removed — "always assigned by Super Admin" is now its own explicit,
     // always-Super-Admin-gated action (assignScorer / accepting a scorer request), not a
     // side-channel through match creation. See AssignScorerRequest below.
@@ -153,12 +207,6 @@ data class RecentMatchSummary(
 data class LiveMatchPointer(val matchId: Long, val teamAName: String, val teamBName: String, val groundName: String? = null)
 
 @Serializable
-data class HeadToHeadResponse(
-    val teamAId: Long, val teamAName: String, val teamBId: Long, val teamBName: String,
-    val teamAWins: Int, val teamBWins: Int, val ties: Int, val totalMatches: Int,
-)
-
-@Serializable
 data class LeaderboardEntry(val playerId: Long, val playerName: String, val total: Int)
 
 @Serializable
@@ -180,7 +228,24 @@ data class FeedResponse(
     // GAP FIX: createdByUserId was never exposed before — needed to compare against
     // CurrentUser.userId for "add, edit and delete option applicable for feeds owner".
     val createdByUserId: Long? = null, val createdByName: String? = null, val createdAt: String,
+    // KvsvRequest1.3 #7 — "show the name in match summary feeds in bold".
+    val playerOfMatchId: Long? = null, val playerOfMatchName: String? = null,
 )
+
+// ---- Match close / Player of the Match admin actions (KvsvRequest1.3 #6, #7) ----
+
+@Serializable
+data class AdminCloseMatchRequest(val reason: String)
+
+@Serializable
+data class MatchCloseRequestResponse(
+    val id: Long, val matchId: Long, val requestedByUserId: Long, val requestedByName: String,
+    val reason: String, val status: String, val reviewNote: String? = null,
+    val createdAt: String, val resolvedAt: String? = null, val resolvedByName: String? = null,
+)
+
+@Serializable
+data class SetPlayerOfMatchRequest(val playerId: Long)
 
 @Serializable
 // Feature request: "for feeds user can select multiple images, slide show in details page."

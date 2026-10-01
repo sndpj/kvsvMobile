@@ -26,6 +26,15 @@ object CurrentUser {
     val canManageMasterPool get() = role == "SUPER_ADMIN"
     val canSplitPoolIntoTeams get() = role == "SUPER_ADMIN" || role == "TEAM_MANAGER"
 
+    // KvsvRequest1.3 #6/#7 — mirror the backend's POST /api/matches/*/admin-close and
+    // PATCH /api/matches/*/player-of-match rules (TOURNAMENT_ADMIN or SUPER_ADMIN).
+    val canCloseMatchDirectly get() = role == "SUPER_ADMIN" || role == "TOURNAMENT_ADMIN"
+    val canSetPlayerOfMatch get() = role == "SUPER_ADMIN" || role == "TOURNAMENT_ADMIN"
+    // KvsvRequest1.3 #4 — "Super admin can edit player details". Deliberately narrower than the
+    // backend's PUT /api/players/** rule (TEAM_MANAGER+): the request was for Super Admin, and
+    // this only decides where the Edit button shows; the server still enforces its own rule.
+    val canEditPlayerDetails get() = role == "SUPER_ADMIN"
+
     // Feature request: role-based theme, resolved as an accent/badge layer (see RoleBadge.kt for
     // the actual composable — color mapping lives in ui.theme.Color.kt, kept out of this data
     // class to avoid a Compose dependency here). null means "no badge" — deliberately the case

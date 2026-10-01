@@ -52,10 +52,13 @@ private object Routes {
     // Feature: Super Admin role assign/revoke.
     const val USERS = "users"
     const val USER_EDIT = "users/{userId}"
+    // Player profile (KvsvRequest1.3).
+    const val PLAYER_PROFILE = "player/{playerId}"
     fun scoring(matchId: Long) = "scoring/$matchId"
     fun history(matchId: Long) = "history/$matchId"
     fun feedDetail(feedId: Long) = "feed/$feedId"
     fun userEdit(userId: Long) = "users/$userId"
+    fun playerProfile(playerId: Long) = "player/$playerId"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -122,6 +125,7 @@ fun AppNavHost() {
                 onJoinTeam = { navController.navigate(Routes.JOIN_TEAM) },
                 onPostFeed = { navController.navigate(Routes.POST_FEED) },
                 onManageUsers = { navController.navigate(Routes.USERS) },
+                onPlayerClick = { playerId -> navController.navigate(Routes.playerProfile(playerId)) },
                 refreshFeedsSignal = feedsChanged,
 				onLiveMatchClick = { matchId -> navController.navigate(Routes.scoring(matchId)) },
                 onLogout = {
@@ -168,7 +172,10 @@ fun AppNavHost() {
             arguments = listOf(navArgument("matchId") { type = NavType.LongType }),
         ) { backStackEntry ->
             val matchId = backStackEntry.arguments?.getLong("matchId") ?: return@composable
-            HistoryDetailScreen(matchId = matchId, onBack = { navController.popBackStack() })
+            HistoryDetailScreen(
+                matchId = matchId, onBack = { navController.popBackStack() },
+                onPlayerClick = { playerId -> navController.navigate(Routes.playerProfile(playerId)) },
+            )
         }
 
         composable(
@@ -212,11 +219,29 @@ fun AppNavHost() {
         }
 
         composable(Routes.TEAM_MANAGEMENT) {
-            TeamManagementScreen(onBack = { navController.popBackStack() })
+            TeamManagementScreen(
+                onBack = { navController.popBackStack() },
+                onPlayerClick = { playerId -> navController.navigate(Routes.playerProfile(playerId)) },
+            )
         }
 
         composable(Routes.MASTER_POOL) {
-            MasterPoolScreen(onBack = { navController.popBackStack() })
+            MasterPoolScreen(
+                onBack = { navController.popBackStack() },
+                onPlayerClick = { playerId -> navController.navigate(Routes.playerProfile(playerId)) },
+            )
+        }
+
+        composable(
+            Routes.PLAYER_PROFILE,
+            arguments = listOf(navArgument("playerId") { type = NavType.LongType }),
+        ) { backStackEntry ->
+            val playerId = backStackEntry.arguments?.getLong("playerId") ?: return@composable
+            com.tekadi.kvvs.league.ui.player.PlayerProfileScreen(
+                playerId = playerId,
+                onBack = { navController.popBackStack() },
+                onMatchClick = { matchId -> navController.navigate(Routes.history(matchId)) },
+            )
         }
 
         composable(Routes.STANDINGS) {

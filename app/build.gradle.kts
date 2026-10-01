@@ -17,8 +17,8 @@ android {
 
         // Point this at your backend from V1__init_schema.sql / the Spring Boot scaffold.
         // 10.0.2.2 is how the Android emulator reaches your host machine's localhost.
-        buildConfigField("String", "API_BASE_URL", "\"https://kvsv-backend-service-test-965304126046.us-central1.run.app/\"")
-//        buildConfigField("String", "API_BASE_URL", "\"http://192.168.1.5:8080/\"")
+//        buildConfigField("String", "API_BASE_URL", "\"https://kvsv-backend-service-test-965304126046.us-central1.run.app/\"")
+        buildConfigField("String", "API_BASE_URL", "\"http://192.168.1.13:8080/\"")
     }
 
     buildTypes {

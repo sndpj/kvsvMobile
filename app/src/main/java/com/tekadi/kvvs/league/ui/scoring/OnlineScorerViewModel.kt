@@ -355,7 +355,9 @@ class OnlineScorerViewModel(app: Application) : AndroidViewModel(app) {
         val m = match ?: return
         val sc = scorecard
         screen = when {
-            m.status == "COMPLETED" -> OnlineScreen.RESULT
+            // KvsvRequest1.3 #6: CANCELLED (closed by an admin, or an approved close request)
+            // used to fall through to TOSS/OPENERS/LIVE and look still scorable.
+            isMatchOver(m.status, sc?.status) -> OnlineScreen.RESULT
             // Feature request #3: the deciding innings finished, but nothing about the result
             // exists yet — the assigned scorer has to explicitly close the match first. A
             // distinct screen from both LIVE (scoring is genuinely done) and RESULT (no summary
@@ -389,6 +391,73 @@ class OnlineScorerViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 error = "Couldn't reach the server: ${e.message ?: e::class.simpleName}"
             } finally { loading = false }
+        }
+    }
+
+    // ---------------- KvsvRequest1.3 admin actions ----------------
+
+    val canCloseMatchNow: Boolean get() = showCloseMatchAction(CurrentUser.canCloseMatchDirectly, match?.status)
+    val canOverridePlayerOfMatch: Boolean get() = showPlayerOfMatchOverride(CurrentUser.canSetPlayerOfMatch, match?.status)
+
+    /** #6 — Super/Tournament Admin closes the match right away with a reason (no approval step). */
+    fun adminCloseMatch(reason: String, onClosed: () -> Unit) {
+        val m = match ?: return
+        closeReasonError(reason)?.let { error = it; return }
+        loading = true; error = null
+        viewModelScope.launch {
+            try {
+                val res = RetrofitClient.api.adminCloseMatch(m.id, AdminCloseMatchRequest(reason.trim()))
+                if (res.isSuccessful) {
+                    // Reload rather than patch locally: status, result summary and scorecard all changed.
+                    val matchRes = RetrofitClient.api.getMatch(m.id)
+                    matchRes.body()?.let { match = it }
+                    deriveScreen()
+                    info = "Match closed"
+                    onClosed()
+                } else error = when (res.code()) {
+                    403 -> "Only a Super Admin or Tournament Admin can close a match"
+                    else -> res.friendlyErrorMessage("Couldn't close the match (HTTP ${res.code()})")
+                }
+            } catch (e: Exception) {
+                error = "Couldn't reach the server: ${e.message ?: e::class.simpleName}"
+            } finally { loading = false }
+        }
+    }
+
+    /** #7 — override the automatically chosen Player of the Match. */
+    fun setPlayerOfMatch(playerId: Long) {
+        val m = match ?: return
+        loading = true; error = null
+        viewModelScope.launch {
+            try {
+                val res = RetrofitClient.api.setPlayerOfMatch(m.id, SetPlayerOfMatchRequest(playerId))
+                if (res.isSuccessful && res.body() != null) {
+                    match = res.body()
+                    info = "Player of the Match updated"
+                } else error = res.friendlyErrorMessage("Couldn't update Player of the Match (HTTP ${res.code()})")
+            } catch (e: Exception) {
+                error = "Couldn't reach the server: ${e.message ?: e::class.simpleName}"
+            } finally { loading = false }
+        }
+    }
+
+    /**
+     * #5 — squads are loaded once when the match opens. A player added to a team mid-match (Team
+     * Management) shows up in the next-batter/next-bowler pickers after this; the server accepts
+     * them as long as they're on that team's roster.
+     */
+    fun refreshSquads() {
+        val m = match ?: return
+        viewModelScope.launch {
+            try {
+                val aRes = RetrofitClient.api.getPlayers(m.teamAId)
+                val bRes = RetrofitClient.api.getPlayers(m.teamBId)
+                if (aRes.isSuccessful) teamAPlayers = aRes.body().orEmpty()
+                if (bRes.isSuccessful) teamBPlayers = bRes.body().orEmpty()
+                info = "Squads refreshed"
+            } catch (e: Exception) {
+                error = "Couldn't reach the server: ${e.message ?: e::class.simpleName}"
+            }
         }
     }
 
